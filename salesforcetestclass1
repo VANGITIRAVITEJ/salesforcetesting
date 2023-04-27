@@ -1,0 +1,807 @@
+/*
+Auhtor      : Allan Gasgonia
+Company     : Fujitsu America
+Created Date: 04 Dec-2009
+Modified    : 
+Description : Controller class for VisualForce page 'SubmissionReservationCheckPage'.
+*/
+/*
+Author		:	Terence Chiu
+Company		:	Starr Companies
+Modified	:	04 Sept - 2013
+Description	:	Modified sendEmail method. Added an exclusion list for record type names. Only send emails to assigned underwriters for submissions
+Not in the exclusion list
+Zendesk ticket# 53293
+
+*/
+global without sharing class SubmissionReservationCheckBetaContlr {
+    
+    global Date sysDate = Date.Today().addYears(-5);
+    global static String source_2 = Constant.source_2;
+    global static String source_1 = Constant.source_1;
+    public class OppData{
+        Opportunity Opp;
+        Boolean Starr_Limit;
+        String Product_Occupancy;
+        String Layer;
+        Boolean listedInResChkLmtCol;
+        String policyLimitCurr;
+        String contractor;
+        String projectName;
+        String starrPolicyLimitCurr;
+        String approximateStarrLimit;
+        String attachmentPoint;
+        
+        public void setOpp(Opportunity setterVal){
+            this.Opp = setterVal;
+        }
+        public Opportunity getOpp(){
+            return this.Opp;
+        }
+        public void setStarr_Limit(Boolean setterVal){
+            this.Starr_Limit = setterVal;
+        }
+        public Boolean getStarr_Limit(){
+            return this.Starr_Limit;
+        }
+        public void setProduct_Occupancy(String setterVal){
+            this.Product_Occupancy = setterVal;
+        }
+        public String getProduct_Occupancy(){
+            return this.Product_Occupancy;
+        }
+        public void setLayer(String setterVal){
+            this.Layer = setterVal;
+        }
+        public String getLayer(){
+            return this.Layer;
+        }
+        public void setListedInResChkLmtCol(Boolean listedInResChkLmtCol){
+            this.listedInResChkLmtCol = listedInResChkLmtCol;
+        }
+        public Boolean getListedInResChkLmtCol(){
+            return this.listedInResChkLmtCol;
+        }
+        public void setPolicyLimitCurr(String policyLimitCurr){
+            this.policyLimitCurr = policyLimitCurr;
+        }
+        public String getPolicyLimitCurr(){
+            return this.policyLimitCurr;
+        }
+        public void setContractor(String contractor){
+            this.contractor = contractor;
+        }
+        public String getContractor(){
+            return this.contractor;
+        }
+        public void setProjectName(String projectName){
+            this.projectName = projectName;
+        }
+        public String getProjectName(){
+            return this.projectName;
+        }
+        
+        public void setStarrPolicyLimitCurr(String starrPolicyLimitCurr){
+            this.starrPolicyLimitCurr = starrPolicyLimitCurr;
+        }
+        public String getStarrPolicyLimitCurr(){
+            return this.starrPolicyLimitCurr;
+        }
+        
+        public void setApproximateStarrLimit(String approximateStarrLimit){
+            this.approximateStarrLimit = approximateStarrLimit;
+        }
+        public String getApproximateStarrLimit(){
+            return this.approximateStarrLimit;
+        }
+        
+        public void setAttachmentPoint(String attachmentPoint){
+            this.attachmentPoint = attachmentPoint;
+        }
+        public String getAttachmentPoint(){
+            return this.attachmentPoint;
+        }
+        
+    }
+    
+    
+    public final String OPP_STAGENAME_BOUND = 'Bound';
+    
+    public Boolean OppExists = false;//Variable determines in Opportunites exist or not which then is used on page for data or message.
+    public Boolean ProjectNameOppExists= false; //Reservation Check RC
+    public Boolean ContractorOppExists= false; //RC
+    public Boolean FuzzyAccountsExists= false;
+    public String accountId = '';
+    public String currentOpportunityID ='';
+    public String ExecutedBy ='';
+    public String CurDateTime ='';
+    public String ClientName ='';
+    public String DunsNumber ='';
+    public String UltimateDunsNumber ='';
+    public String AddressLine1 ='';
+    public String AddressLine2 ='';
+    public String AddressLine3 ='';
+    public String AddressCity ='';
+    public String AddressState ='';
+    public String AddressCountry ='';
+    public String Source = source_2;
+    public String Source1= source_1;
+    public Double totalStarrAggregatedLimits =0.0;
+    public List<String> recordTypes1List; 
+    public String currentId ='';
+    public List<OppData> Opportunities = new List<OppData>();
+    public List<Opportunity> ProjectNameOpportunities = new List<Opportunity>(); //RC
+    public List<Opportunity> ContractorOpportunities = new List<Opportunity>(); //RC
+    public List<Account> fuzzyAccountsResult = new List<Account>();
+    public Set<String> oppTypesforReport = new Set<String>{'New', 'Renewal', 'Terrorism', 'Section'};
+        public Set<String> oppRecordTypesforReport = new Set<String>{'Global Construction', 'Global Offshore', 'International Onshore', 'International Property'};
+            public Map<String,ReservationCheckLimitColumns__c> oppReservationCheckLimitColumns=ReservationCheckLimitColumns__c.getall();
+    
+    //Setters and Getters
+    public void setExecutedBy(String setterVal){ this.ExecutedBy = setterVal; } public String getExecutedBy(){ return this.ExecutedBy; }
+    public void setCurDateTime(String setterVal){ this.CurDateTime = setterVal; } public String getCurDateTime(){ return this.CurDateTime; }
+    public void setClientName(String setterVal){ this.ClientName = setterVal; } public String getClientName(){ return this.ClientName; }
+    public void setDunsNumber(String setterVal){ this.DunsNumber = setterVal; } public String getDunsNumber(){ return this.DunsNumber; }
+    public void setUltimateDunsNumber(String setterVal){ this.UltimateDunsNumber = setterVal; } public String getUltimateDunsNumber(){ return this.UltimateDunsNumber; }
+    public void setAddressLine1(String setterVal){ this.AddressLine1 = setterVal; } public String getAddressLine1(){ return this.AddressLine1; }
+    public void setAddressLine2(String setterVal){ this.AddressLine2 = setterVal; } public String getAddressLine2(){ return this.AddressLine2; }
+    public void setAddressLine3(String setterVal){ this.AddressLine3 = setterVal; } public String getAddressLine3(){ return this.AddressLine3; }
+    public void setAddressCity(String setterVal){ this.AddressCity = setterVal; } public String getAddressCity(){ return this.AddressCity; }
+    public void setAddressState(String setterVal){ this.AddressState = setterVal; } public String getAddressState(){ return this.AddressState; }
+    public void setAddressCountry(String setterVal){ this.AddressCountry = setterVal; } public String getAddressCountry(){ return this.AddressCountry; }
+    public void setOpportunities(List<OppData> setterList){ this.Opportunities.addAll(setterList); } public List<OppData> getOpportunities(){ return this.Opportunities; }
+    public void setProjectNameOpportunities(List<Opportunity> setterList){this.ProjectNameOpportunities.addAll(setterList);} public List<Opportunity> getProjectNameOpportunities(){return this.ProjectNameOpportunities;} //RC
+    public void setContractorOpportunities(List<Opportunity> setterList){this.ContractorOpportunities.addAll(setterList);} public List<Opportunity> getContractorOpportunities(){return this.ContractorOpportunities;} //RC
+    public void setfuzzyAccountsResult(List<Account> setterList){this.fuzzyAccountsResult.addAll(setterList);} public List<Account> getfuzzyAccountsResult(){return this.fuzzyAccountsResult;}
+    public void setOppExists(Boolean setterVal){ this.OppExists= setterVal; } public Boolean getOppExists(){ return this.OppExists; }
+    public void setProjectNameOppExists(Boolean setterVal){ this.ProjectNameOppExists= setterVal; } public Boolean getProjectNameOppExists(){ return this.ProjectNameOppExists; } //RC
+    public void setContractorOppExists(Boolean setterVal){ this.ContractorOppExists= setterVal; } public Boolean getContractorOppExists(){ return this.ContractorOppExists; } //RC
+    public void setFuzzyAccountsExists(Boolean setterVal){ this.FuzzyAccountsExists= setterVal; } public Boolean getFuzzyAccountsExists(){ return this.FuzzyAccountsExists; }
+    public void setSource(String setterVal){ this.Source= setterVal; } public String getSource(){ return this.Source; }
+    public void setSource1(String setterVal){ this.Source1= setterVal; } public String getSource1(){ return this.Source1; }
+    public void setrecordTypes1List(List<String> setterList){this.recordTypes1List.addAll(setterList);} public List<String> getrecordTypes1List(){return this.recordTypes1List;}
+    
+    public String getTotalStarrAggregatedLimits(){
+        return formatCurrencyWithoutDecimal(this.totalStarrAggregatedLimits); //formatCurrency(this.totalStarrAggregatedLimits);
+    }
+    
+    //Constructor
+    public SubmissionReservationCheckBetaContlr(){
+        System.debug('source_2'+source_2);
+        
+        currentId = ApexPages.currentPage().getParameters().get('accId');
+        if (currentId.startsWith('006')){ //Checks if the sobject is Opportunity
+            Opportunity currentOpp =  [Select AccountId from Opportunity Where Id =: currentId ];
+            accountId=currentOpp.AccountId;
+        }
+        else{  
+            accountId = ApexPages.currentPage().getParameters().get('accId');
+        }
+        
+        currentOpportunityID = ApexPages.currentPage().getParameters().get('oppyId');
+        
+        System.debug('AccId'+accountId+'-----OppId'+currentOpportunityID);
+        ExecutedBy = UserInfo.getName();
+        CurDateTime = String.valueOf(datetime.now());
+        totalStarrAggregatedLimits = 0;
+        Boolean addSubmissionToTheList;
+        
+        Map<String, ReservationCheckLimitColumns__c> mapReservationCheckLimitCol = new Map<String, ReservationCheckLimitColumns__c>();
+        mapReservationCheckLimitCol = ReservationCheckLimitColumns__c.getAll();
+        Set<String> setReservationCheckLimitColVal = new Set<String>();
+        
+        if(mapReservationCheckLimitCol!=null && !mapReservationCheckLimitCol.isEmpty() ) {
+            for(ReservationCheckLimitColumns__c objResCheckLimitCol : mapReservationCheckLimitCol.values()) {
+                setReservationCheckLimitColVal.add(objResCheckLimitCol.Name);
+            }
+        }
+        System.debug('setReservationCheckLimitColVal:::::'+setReservationCheckLimitColVal);
+        
+        Account[] fuzzyAccount = [SELECT Name, ShippingStreet, ShippingCity, ShippingState, ShippingPostalCode, ShippingCountry FROM Account WHERE Name LIKE 'A%' OR Name LIKE 'B%' ORDER BY Name LIMIT 300];
+        if (fuzzyAccount!=null && !fuzzyAccount.isEmpty() ){
+            FuzzyAccountsExists = true;
+            fuzzyAccountsResult.addAll(fuzzyAccount);
+        }
+        
+        Account[] account ;
+        if(accountId!=null && !String.isBlank(accountId)){
+            account = [SELECT Name, DUNS_Number__c, Global_Ultimate_Number__c, ShippingStreet, ShippingCity, ShippingState, ShippingPostalCode, ShippingCountry,Source__c  FROM Account WHERE Id=: accountId];
+        }
+        
+        
+        if(account!=null && !account.isEmpty()){
+            // Source=account[0].Source__c;
+            Opportunity[] opps = [SELECT RecordType.Name, Type, Product__c, Occupancy__c, Issuing_Office__c, Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c,
+                                  Producer__r.Name, Assigned_Underwriter__c,StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c*/ Policy_Limit_Curr__c,Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode,Starr_Limit_USD__c,
+                                  Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name,SF30_10_Line_of_Business__c,Line_of_Business__c
+                                  FROM Opportunity
+                                  WHERE AccountId =: accountId and StageName !='Void' and Expiration_Date__c >=:sysDate and Type in: oppTypesforReport
+                                  ORDER BY
+                                  RecordType.Name ASC, Type ASC,  Product__c ASC, Occupancy__c ASC,Issuing_Office__c  ASC,
+                                  Production_Office__c ASC, Assigned_Underwriter__c ASC, Effective_Date__c ASC, Expiration_Date__c ASC,
+                                  Producer__r.Name ASC, StageName ASC, Insurance_Sub_Type__c ASC, Layer__c ASC, CurrencyISOCode ASC, /*Policy_Limit__c DESC,*/
+                                  Policy_Limit_Curr__c DESC, Starr_Limit_Currency__c DESC, Starr_Limit__c DESC, Name ASC];
+            
+            ClientName = account[0].Name.escapeEcmaScript();
+            AddressLine1 = '';
+            AddressLine2 = '';
+            AddressLine3 = '';
+            if(account[0].ShippingStreet != null){
+                AddressLine1 = account[0].ShippingStreet.escapeEcmaScript();
+            }
+            if(account[0].ShippingCity != null){
+                AddressCity = account[0].ShippingCity.escapeEcmaScript();
+            }
+            if(account[0].ShippingState != null){
+                AddressState = account[0].ShippingState.escapeEcmaScript();
+            }
+            if(account[0].ShippingCity != null && account[0].ShippingState!= null && account[0].ShippingPostalCode != null){
+                AddressLine2 = account[0].ShippingCity.escapeEcmaScript()+', '+account[0].ShippingState.escapeEcmaScript()+' '+ account[0].ShippingPostalCode.escapeEcmaScript();
+            }
+            if(account[0].ShippingCountry != null){
+                AddressLine3 = account[0].ShippingCountry.escapeEcmaScript();
+                AddressCountry = account[0].ShippingCountry.escapeEcmaScript();
+            }
+            if(account[0].DUNS_Number__c != null){
+                DunsNumber = account[0].DUNS_Number__c;
+            }
+            if(account[0].Global_Ultimate_Number__c != null){
+                UltimateDunsNumber = account[0].Global_Ultimate_Number__c;
+            }
+            OppExists = false;
+            
+            if (opps!=null && !opps.isEmpty() ){
+                
+                Map<String, ResCheckAggregateLimitExclusions__c> mapResCheckAggLimitExclusions = new Map<String, ResCheckAggregateLimitExclusions__c>();
+                mapResCheckAggLimitExclusions = ResCheckAggregateLimitExclusions__c.getAll();
+                Set<String> lstExclusionOppRecordType_Type = new Set<String>();
+                
+                if(mapResCheckAggLimitExclusions!=null && !mapResCheckAggLimitExclusions.isEmpty() ) {
+                    for(ResCheckAggregateLimitExclusions__c objResCheckLimit : mapResCheckAggLimitExclusions.values()) {
+                        lstExclusionOppRecordType_Type.add(objResCheckLimit.Record_Type_Name__c + objResCheckLimit.Type__c);
+                    }
+                }
+                System.debug('lstExclusionOppRecordType_Type:::'+lstExclusionOppRecordType_Type);
+                
+                //Opportunities.addAll(opps);
+                OppExists = true;
+                //Preparing Data to be displayed on Page
+                for(Integer i=0; i<opps.size(); i++){
+                    
+                    System.debug('*****************'+opps[i].Policy_Limit_Curr__c+'******'+opps[i].Starr_Limit__c);
+                    OppData tempOppData = new OppData();
+                    tempOppData.Opp = opps[i];
+                    tempOppData.Product_Occupancy = '';
+                    if(oppRecordTypesforReport.contains(opps[i].RecordType.Name)){
+                        tempOppData.Product_Occupancy = opps[i].Occupancy__c;
+                        tempOppData.Layer = opps[i].Layer__c;
+                        //opps[i].Policy_Limit__c = opps[i].Policy_Limit_Curr__c;//Setting value of Policy_Limit_Curr__c in Policy_Limit__c as Policy_Limit_Curr__c is dated currency and cannot be bound with outputField on page.
+                        tempOppData.Starr_Limit = true;
+                    }
+                    else {
+                        tempOppData.Product_Occupancy = opps[i].Product__c;
+                        tempOppData.Layer = opps[i].Insurance_Sub_Type__c;
+                        tempOppData.Starr_Limit = false;
+                    }system.debug('temp----prod1--'+tempOppData.Product_Occupancy);
+                    //modification
+                    system.debug('oppReservationCheckLimitColumns.Keyset() =' + oppReservationCheckLimitColumns.Keyset());
+                    if(oppReservationCheckLimitColumns!=null){
+                        for(string r : oppReservationCheckLimitColumns.Keyset()){
+                            system.debug('Reservation checklist values =' + r);
+                        }
+                    }
+                    
+                    System.debug('opps[i] =' + opps[i]);
+                    if(oppReservationCheckLimitColumns.containsKey(opps[i].RecordType.Name)){
+                        system.debug('Inside reservation check limit');
+                        //tempOppData.Product_Occupancy = opps[i].Occupancy__c;
+                        //tempOppData.Layer = opps[i].Layer__c;
+                        tempOppData.Product_Occupancy = opps[i].Product__c;
+                        tempOppData.Layer = opps[i].Insurance_Sub_Type__c;
+                        //opps[i].Policy_Limit__c = opps[i].Policy_Limit_Curr__c;//Setting value of Policy_Limit_Curr__c in Policy_Limit__c as Policy_Limit_Curr__c is dated currency and cannot be bound with outputField on page.
+                        //tempOppData.Starr_Limit = true;
+                    }
+                    else {
+                        tempOppData.Product_Occupancy = opps[i].Occupancy__c;
+                        tempOppData.Layer = opps[i].Layer__c;
+                        //tempOppData.Starr_Limit = false;
+                    } system.debug('temp----prod3--'+tempOppData.Product_Occupancy);
+                    
+                    if(setReservationCheckLimitColVal.contains(opps[i].RecordType.Name)) {
+                        tempOppData.listedInResChkLmtCol = true;
+                        tempOppData.starrPolicyLimitCurr = formatCurrencyWithoutDecimal(opps[i].Starr_Limit_Currency__c); //RC
+                    } else {
+                        tempOppData.policyLimitCurr = formatCurrencyWithoutDecimal(opps[i].Policy_Limit_Curr__c);
+                        tempOppData.starrPolicyLimitCurr = formatCurrencyWithoutDecimal(opps[i].Starr_Limit__c); //RC
+                        //opps[i].Policy_Limit__c = opps[i].Policy_Limit_Curr__c;
+                        tempOppData.listedInResChkLmtCol = false;
+                    }
+                    
+                    tempOppData.approximateStarrLimit = formatCurrencyWithoutDecimal(opps[i].Starr_Limit_USD__c); //RC
+                    tempOppData.attachmentPoint = formatCurrencyWithoutDecimal(opps[i].Attachment_Point_USD_Conv__c); //RC
+                    tempOppData.contractor = opps[i].Contractor__r.Name; //RC
+                    tempOppData.projectName = opps[i].Project_Name__r.Name; //RC
+                    
+                    Opportunities.add(tempOppData);
+                    System.debug('opps[i].RecordType.Name + opps[i].Type'+opps[i].RecordType.Name + opps[i].Type);
+                    if (opps[i].Effective_Date__c <= System.today() && System.today() <= opps[i].Expiration_Date__c && opps[i].StageName == OPP_STAGENAME_BOUND
+                        && (!(lstExclusionOppRecordType_Type.contains(opps[i].RecordType.Name + opps[i].Type)))) {
+                            System.debug('opps[i].Starr_Limit_USD__c'+opps[i].Starr_Limit_USD__c);
+                            totalStarrAggregatedLimits +=  opps[i].Starr_Limit_USD__c;
+                        }
+                    
+                }
+            }
+            
+            String recordTypes1 =System.Label.Recordtypes10;
+            recordTypes1List = recordTypes1.split(':');
+            
+            //Reservation Check Codes
+            //Contractor Submissions
+            Opportunity[] ContractorOpps;
+            if(accountId!=null && !String.isBlank(accountId)&& sysDate!=null && oppTypesforReport!=null && !oppTypesforReport.isEmpty()){
+                ContractorOpps  = [SELECT Name, RecordType.Name, Type, Account.Name, Project_Name__r.Name,
+                                   Status__c,/* Policy_Number__c, */ StageName, Effective_Date__c, Expiration_Date__c,
+                                   Assigned_Underwriter__r.Name, Producer__r.Name, Starr_Estimated_Premium_Curr__c,
+                                   Business_Unit__c,Product__c, Issuing_Office__c, Production_Office__c,
+                                   Layer__c, CurrencyISOCode,Policy_Limit_Curr__c, /*Policy_Limit__c,*/ Starr_Limit__c, Starr_Limit_Currency__c,
+                                   Starr_Limit_USD__c, Attachment_Point_USD_Conv__c,SF30_10_Line_of_Business__c,Line_of_Business__c
+                                   FROM Opportunity
+                                   WHERE Contractor__c =: accountId and StageName !='Void' and Expiration_Date__c >=:sysDate and Type in: oppTypesforReport 
+                                   ORDER BY Name];
+            }
+            
+            ContractorOppExists = false;
+            
+            if (ContractorOpps!=null && !ContractorOpps.isEmpty() ){
+                ContractorOppExists = true;
+                ContractorOpportunities.addAll(ContractorOpps);
+            }
+            
+            //Project Name Submissions
+            Opportunity[] projectNameOpps;
+            if(accountId!=null && !String.isBlank(accountId)&& sysDate!=null && oppTypesforReport!=null && !oppTypesforReport.isEmpty()){
+                projectNameOpps = [SELECT Name, RecordType.Name, Type, Account.Name, Contractor__r.Name,
+                                   Status__c, /*Policy_Number__c,*/  StageName, Effective_Date__c, Expiration_Date__c,
+                                   Assigned_Underwriter__r.Name, Producer__r.Name, Starr_Estimated_Premium_Curr__c,
+                                   Business_Unit__c,Product__c, Issuing_Office__c, Production_Office__c,
+                                   Layer__c, CurrencyISOCode,Policy_Limit_Curr__c, /*Policy_Limit__c,*/ Starr_Limit__c, Starr_Limit_Currency__c,
+                                   Starr_Limit_USD__c, Attachment_Point_USD_Conv__c,SF30_10_Line_of_Business__c,Line_of_Business__c
+                                   FROM Opportunity
+                                   WHERE Project_Name__c =: accountId and StageName !='Void' and Expiration_Date__c >=:sysDate and Type in: oppTypesforReport 
+                                   ORDER BY Name];
+            }
+            
+            ProjectNameOppExists = false;
+            System.debug('Project'+projectNameOpps.size());
+            if (projectNameOpps!=null && !projectNameOpps.isEmpty() ){
+                ProjectNameOppExists = true;
+                ProjectNameOpportunities.addAll(projectNameOpps);
+            }
+        }
+    }
+    //Debhika
+    @AuraEnabled
+    public static accountsKeyWrapper getSearchKeys(String IdOfAccount){
+        System.debug('@:accids==>'+IdOfAccount);
+        String OPP_STAGENAME_BOUND = 'Bound';
+        Date sysDate = Date.Today().addYears(-5);
+        String currentId ='';
+        String accountId = '';
+        String currentOpportunityID = '';
+        Boolean OppExists = false;//Variable determines in Opportunites exist or not which then is used on page for data or message.
+        Boolean ProjectNameOppExists= false; //Reservation Check RC
+        Boolean ContractorOppExists= false; //RC
+        Boolean FuzzyAccountsExists= false;
+        String ExecutedBy ='';
+        String CurDateTime ='';
+        String ClientName ='';
+        String DunsNumber ='';
+        String UltimateDunsNumber ='';
+        String AddressLine1 ='';
+        String AddressLine2 ='';
+        String AddressLine3 ='';
+        String AddressCity ='';
+        String AddressState ='';
+        String AddressCountry ='';
+        String Source = source_2;
+        String Source1= source_1;
+        Double totalStarrAggregatedLimits =0.0;
+        List<String> recordTypes1List; 
+        List<OppData> Opportunities = new List<OppData>();
+        List<Opportunity> ProjectNameOpportunities = new List<Opportunity>(); //RC
+        List<Opportunity> ContractorOpportunities = new List<Opportunity>(); //RC
+        List<Account> fuzzyAccountsResult = new List<Account>();
+        Set<String> oppTypesforReport = new Set<String>{'New', 'Renewal', 'Terrorism', 'Section'};
+            Set<String> oppRecordTypesforReport = new Set<String>{'Global Construction', 'Global Offshore', 'International Onshore', 'International Property'};
+                Map<String,ReservationCheckLimitColumns__c> oppReservationCheckLimitColumns=ReservationCheckLimitColumns__c.getall();
+        
+        
+        currentId = IdOfAccount;
+        if (currentId.startsWith('006')){ //Checks if the sobject is Opportunity
+            Opportunity currentOpp =  [Select AccountId from Opportunity Where Id =: currentId ];
+            accountId=currentOpp.AccountId;
+        }
+        else{  
+            accountId = IdOfAccount;
+        }
+        
+        //currentOpportunityID = ApexPages.currentPage().getParameters().get('oppyId');
+        
+        System.debug('AccId'+accountId+'-----OppId'+currentOpportunityID);
+        //ExecutedBy = UserInfo.getName();
+        //CurDateTime = String.valueOf(datetime.now());
+        //totalStarrAggregatedLimits = 0;
+        Boolean addSubmissionToTheList;
+        
+        Map<String, ReservationCheckLimitColumns__c> mapReservationCheckLimitCol = new Map<String, ReservationCheckLimitColumns__c>();
+        mapReservationCheckLimitCol = ReservationCheckLimitColumns__c.getAll();
+        Set<String> setReservationCheckLimitColVal = new Set<String>();
+        
+        if(mapReservationCheckLimitCol!=null && !mapReservationCheckLimitCol.isEmpty() ) {
+            for(ReservationCheckLimitColumns__c objResCheckLimitCol : mapReservationCheckLimitCol.values()) {
+                setReservationCheckLimitColVal.add(objResCheckLimitCol.Name);
+            }
+        }
+        System.debug('setReservationCheckLimitColVal:::::'+setReservationCheckLimitColVal);
+        
+        Account[] fuzzyAccount = [SELECT Name, ShippingStreet, ShippingCity, ShippingState, ShippingPostalCode, ShippingCountry FROM Account WHERE Name LIKE 'A%' OR Name LIKE 'B%' ORDER BY Name LIMIT 300];
+        if (fuzzyAccount!=null && !fuzzyAccount.isEmpty() ){
+            FuzzyAccountsExists = true;
+            fuzzyAccountsResult.addAll(fuzzyAccount);
+        }
+        
+        Account[] account ;
+        if(accountId!=null && !String.isBlank(accountId)){
+            account = [SELECT Name, DUNS_Number__c, Global_Ultimate_Number__c, ShippingStreet, ShippingCity, ShippingState, ShippingPostalCode, ShippingCountry,Source__c  FROM Account WHERE Id=: accountId];
+        }
+        
+        
+        if(account!=null && !account.isEmpty()){
+            // Source=account[0].Source__c;
+            Opportunity[] opps = [SELECT RecordType.Name, Type, Product__c, Occupancy__c, Issuing_Office__c, Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c,
+                                  Producer__r.Name, Assigned_Underwriter__c,StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c*/ Policy_Limit_Curr__c,Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode,Starr_Limit_USD__c,
+                                  Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name
+                                  FROM Opportunity
+                                  WHERE AccountId =: accountId and StageName !='Void' and Expiration_Date__c >=:sysDate and Type in: oppTypesforReport
+                                  ORDER BY
+                                  RecordType.Name ASC, Type ASC,  Product__c ASC, Occupancy__c ASC,Issuing_Office__c  ASC,
+                                  Production_Office__c ASC, Assigned_Underwriter__c ASC, Effective_Date__c ASC, Expiration_Date__c ASC,
+                                  Producer__r.Name ASC, StageName ASC, Insurance_Sub_Type__c ASC, Layer__c ASC, CurrencyISOCode ASC, /*Policy_Limit__c DESC,*/
+                                  Policy_Limit_Curr__c DESC, Starr_Limit_Currency__c DESC, Starr_Limit__c DESC, Name ASC];
+            
+            ClientName = account[0].Name.escapeEcmaScript();
+            AddressLine1 = '';
+            AddressLine2 = '';
+            AddressLine3 = '';
+            if(account[0].ShippingStreet != null){
+                AddressLine1 = account[0].ShippingStreet.escapeEcmaScript();
+            }
+            if(account[0].ShippingCity != null){
+                AddressCity = account[0].ShippingCity.escapeEcmaScript();
+            }
+            if(account[0].ShippingState != null){
+                AddressState = account[0].ShippingState.escapeEcmaScript();
+            }
+            if(account[0].ShippingCity != null && account[0].ShippingState!= null && account[0].ShippingPostalCode != null){
+                AddressLine2 = account[0].ShippingCity.escapeEcmaScript()+', '+account[0].ShippingState.escapeEcmaScript()+' '+ account[0].ShippingPostalCode.escapeEcmaScript();
+            }
+            if(account[0].ShippingCountry != null){
+                AddressLine3 = account[0].ShippingCountry.escapeEcmaScript();
+                AddressCountry = account[0].ShippingCountry.escapeEcmaScript();
+            }
+            if(account[0].DUNS_Number__c != null){
+                DunsNumber = account[0].DUNS_Number__c;
+            }
+            if(account[0].Global_Ultimate_Number__c != null){
+                UltimateDunsNumber = account[0].Global_Ultimate_Number__c;
+            }
+            OppExists = false;
+            
+            if (opps!=null && !opps.isEmpty() ){
+                
+                Map<String, ResCheckAggregateLimitExclusions__c> mapResCheckAggLimitExclusions = new Map<String, ResCheckAggregateLimitExclusions__c>();
+                mapResCheckAggLimitExclusions = ResCheckAggregateLimitExclusions__c.getAll();
+                Set<String> lstExclusionOppRecordType_Type = new Set<String>();
+                
+                if(mapResCheckAggLimitExclusions!=null && !mapResCheckAggLimitExclusions.isEmpty() ) {
+                    for(ResCheckAggregateLimitExclusions__c objResCheckLimit : mapResCheckAggLimitExclusions.values()) {
+                        lstExclusionOppRecordType_Type.add(objResCheckLimit.Record_Type_Name__c + objResCheckLimit.Type__c);
+                    }
+                }
+                System.debug('lstExclusionOppRecordType_Type:::'+lstExclusionOppRecordType_Type);
+                
+                //Opportunities.addAll(opps);
+                OppExists = true;
+                //Preparing Data to be displayed on Page
+                for(Integer i=0; i<opps.size(); i++){
+                    
+                    System.debug('*****************'+opps[i].Policy_Limit_Curr__c+'******'+opps[i].Starr_Limit__c);
+                    OppData tempOppData = new OppData();
+                    tempOppData.Opp = opps[i];
+                    tempOppData.Product_Occupancy = '';
+                    if(oppRecordTypesforReport.contains(opps[i].RecordType.Name)){
+                        tempOppData.Product_Occupancy = opps[i].Occupancy__c;
+                        tempOppData.Layer = opps[i].Layer__c;
+                        //opps[i].Policy_Limit__c = opps[i].Policy_Limit_Curr__c;//Setting value of Policy_Limit_Curr__c in Policy_Limit__c as Policy_Limit_Curr__c is dated currency and cannot be bound with outputField on page.
+                        tempOppData.Starr_Limit = true;
+                    }
+                    else {
+                        tempOppData.Product_Occupancy = opps[i].Product__c;
+                        tempOppData.Layer = opps[i].Insurance_Sub_Type__c;
+                        tempOppData.Starr_Limit = false;
+                    }system.debug('temp----prod1--'+tempOppData.Product_Occupancy);
+                    //modification
+                    system.debug('oppReservationCheckLimitColumns.Keyset() =' + oppReservationCheckLimitColumns.Keyset());
+                    if(oppReservationCheckLimitColumns!=null){
+                        for(string r : oppReservationCheckLimitColumns.Keyset()){
+                            system.debug('Reservation checklist values =' + r);
+                        }
+                    }
+                    
+                    System.debug('opps[i] =' + opps[i]);
+                    if(oppReservationCheckLimitColumns.containsKey(opps[i].RecordType.Name)){
+                        system.debug('Inside reservation check limit');
+                        //tempOppData.Product_Occupancy = opps[i].Occupancy__c;
+                        //tempOppData.Layer = opps[i].Layer__c;
+                        tempOppData.Product_Occupancy = opps[i].Product__c;
+                        tempOppData.Layer = opps[i].Insurance_Sub_Type__c;
+                        //opps[i].Policy_Limit__c = opps[i].Policy_Limit_Curr__c;//Setting value of Policy_Limit_Curr__c in Policy_Limit__c as Policy_Limit_Curr__c is dated currency and cannot be bound with outputField on page.
+                        //tempOppData.Starr_Limit = true;
+                    }
+                    else {
+                        tempOppData.Product_Occupancy = opps[i].Occupancy__c;
+                        tempOppData.Layer = opps[i].Layer__c;
+                        //tempOppData.Starr_Limit = false;
+                    } system.debug('temp----prod3--'+tempOppData.Product_Occupancy);
+                    
+                    if(setReservationCheckLimitColVal.contains(opps[i].RecordType.Name)) {
+                        tempOppData.listedInResChkLmtCol = true;
+                        //tempOppData.starrPolicyLimitCurr = formatCurrencyWithoutDecimal(opps[i].Starr_Limit_Currency__c); //RC
+                    } else {
+                       // tempOppData.policyLimitCurr = formatCurrencyWithoutDecimal(opps[i].Policy_Limit_Curr__c);
+                        //tempOppData.starrPolicyLimitCurr = formatCurrencyWithoutDecimal(opps[i].Starr_Limit__c); //RC
+                        //opps[i].Policy_Limit__c = opps[i].Policy_Limit_Curr__c;
+                        tempOppData.listedInResChkLmtCol = false;
+                    }
+                    
+                    //tempOppData.approximateStarrLimit = formatCurrencyWithoutDecimal(opps[i].Starr_Limit_USD__c); //RC
+                    //tempOppData.attachmentPoint = formatCurrencyWithoutDecimal(opps[i].Attachment_Point_USD_Conv__c); //RC
+                    tempOppData.contractor = opps[i].Contractor__r.Name; //RC
+                    tempOppData.projectName = opps[i].Project_Name__r.Name; //RC
+                    
+                    Opportunities.add(tempOppData);
+                    System.debug('opps[i].RecordType.Name + opps[i].Type'+opps[i].RecordType.Name + opps[i].Type);
+                    if (opps[i].Effective_Date__c <= System.today() && System.today() <= opps[i].Expiration_Date__c && opps[i].StageName == OPP_STAGENAME_BOUND
+                        && (!(lstExclusionOppRecordType_Type.contains(opps[i].RecordType.Name + opps[i].Type)))) {
+                            System.debug('opps[i].Starr_Limit_USD__c'+opps[i].Starr_Limit_USD__c);
+                            totalStarrAggregatedLimits +=  opps[i].Starr_Limit_USD__c;
+                        }
+                    
+                }
+            }
+            
+            String recordTypes1 =System.Label.Recordtypes10;
+            recordTypes1List = recordTypes1.split(':');
+            
+            //Reservation Check Codes
+            //Contractor Submissions
+            Opportunity[] ContractorOpps;
+            if(accountId!=null && !String.isBlank(accountId)&& sysDate!=null && oppTypesforReport!=null && !oppTypesforReport.isEmpty()){
+                ContractorOpps  = [SELECT Name, RecordType.Name, Type, Account.Name, Project_Name__r.Name,
+                                   Status__c,/* Policy_Number__c, */ StageName, Effective_Date__c, Expiration_Date__c,
+                                   Assigned_Underwriter__r.Name, Producer__r.Name, Starr_Estimated_Premium_Curr__c,
+                                   Business_Unit__c,Product__c, Issuing_Office__c, Production_Office__c,
+                                   Layer__c, CurrencyISOCode,Policy_Limit_Curr__c, /*Policy_Limit__c,*/ Starr_Limit__c, Starr_Limit_Currency__c,
+                                   Starr_Limit_USD__c, Attachment_Point_USD_Conv__c,SF30_10_Line_of_Business__c
+                                   FROM Opportunity
+                                   WHERE Contractor__c =: accountId and StageName !='Void' and Expiration_Date__c >=:sysDate and Type in: oppTypesforReport 
+                                   ORDER BY Name];
+            }
+            
+            ContractorOppExists = false;
+            
+            if (ContractorOpps!=null && !ContractorOpps.isEmpty() ){
+                ContractorOppExists = true;
+                ContractorOpportunities.addAll(ContractorOpps);
+            }
+            
+            //Project Name Submissions
+            Opportunity[] projectNameOpps;
+            if(accountId!=null && !String.isBlank(accountId)&& sysDate!=null && oppTypesforReport!=null && !oppTypesforReport.isEmpty()){
+                projectNameOpps = [SELECT Name, RecordType.Name, Type, Account.Name, Contractor__r.Name,
+                                   Status__c, /*Policy_Number__c,*/  StageName, Effective_Date__c, Expiration_Date__c,
+                                   Assigned_Underwriter__r.Name, Producer__r.Name, Starr_Estimated_Premium_Curr__c,
+                                   Business_Unit__c,Product__c, Issuing_Office__c, Production_Office__c,
+                                   Layer__c, CurrencyISOCode,Policy_Limit_Curr__c, /*Policy_Limit__c,*/ Starr_Limit__c, Starr_Limit_Currency__c,
+                                   Starr_Limit_USD__c, Attachment_Point_USD_Conv__c,SF30_10_Line_of_Business__c
+                                   FROM Opportunity
+                                   WHERE Project_Name__c =: accountId and StageName !='Void' and Expiration_Date__c >=:sysDate and Type in: oppTypesforReport 
+                                   ORDER BY Name];
+            }
+            
+            ProjectNameOppExists = false;
+            System.debug('Project'+projectNameOpps.size());
+            if (projectNameOpps!=null && !projectNameOpps.isEmpty() ){
+                ProjectNameOppExists = true;
+                ProjectNameOpportunities.addAll(projectNameOpps);
+            }
+        }
+       
+		accountsKeyWrapper objKeys = new accountsKeyWrapper(ClientName,DunsNumber,UltimateDunsNumber,AddressLine1,AddressCity,AddressState,AddressCountry);
+
+        return objKeys;
+    }
+   /** @AuraEnabled
+    public static List<accountsWrapper> getAccounts() {
+        
+        // SimpleAccount is a simple "wrapper" Apex class for transport
+        List<accountsWrapper> accountsWrappers = new List<accountsWrapper>();
+        List<Account> accounts = [SELECT Id, Name, Phone FROM Account LIMIT 10000];
+        for (Account acct : accounts) {
+            accountsWrappers.add(new accountsWrapper(acct.Id, acct.Name, acct.Phone));
+        }
+        
+        return accountsWrappers;
+    } **/
+    
+    webservice static String sendEmail(ID currentOpportunityID,ID accountId){
+        
+        //Terence Chiu - 09/04/2013 - Added new set for record type name exclusion
+        Set<String> recordTypeExclusionSet = new Set<String>{'CVS - Excess Casualty',	'CVS - Primary Casualty',	'SIS - Accident & Health',	'SIS - Commercial Auto',	'SIS - Construction',	'SIS - Crisis Management',	'SIS - Energy',	'SIS - Environmental',	'SIS - Financial Lines',	'SIS - General Casualty',	'SIS - General Casualty XS',	'SIS - Home Foreign Casualty',	'SIS - Professional Lines',	'SIS - Programs',	'SIS - Warranty'};
+            
+            Opportunity currentOpp= new Opportunity();
+        Set<String> oppTypesforReport = new Set<String>{'New', 'Renewal', 'Terrorism', 'Section'};
+            set<id> setassignedwriter=new set<id>();
+        //Set<String> oppRecordTypesforReport = new Set<String>{'Global Construction', 'Global Offshore', 'International Onshore', 'International Property'};
+        String UNDERWRITER_TEMPLATE_ID = System.Label.ClearenceCheckTemplateID;
+        DateTime dateToday = system.now();
+        date systdate =  Date.Today().addYears(-5);   
+        //We have to find out all Assigned umderwrites of all opportunities created in last 2 years.
+        DateTime date2YearsBack = datetime.newInstance(dateToday.year()-2,dateToday.month(),dateToday.day());
+        
+        Opportunity[] opps;
+        if(accountId!=null && !string.isBlank(accountId) && systdate!=null && oppTypesforReport!=null && !oppTypesforReport.isEmpty()){
+            opps  = [SELECT RecordType.Name, Type, SF30_10_Line_of_Business__c,Line_Of_Business__c, Product__c, Occupancy__c, Issuing_Office__c, Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c,
+                     Producer__r.Name, StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c,*/ Policy_Limit_Curr__c, Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode, Starr_Limit_USD__c
+                     ,CreatedDate,Assigned_Underwriter__c ,Clearance_Indicator__c ,Business_Unit__c,Attachment_Point_USD_Conv__c
+                     FROM Opportunity
+                     WHERE AccountId =: accountId and StageName !='Void' and Expiration_Date__c >=:systdate and Type in: oppTypesforReport 
+                     ORDER BY
+                     RecordType.Name ASC, Type ASC, Line_Of_Business__c  ASC,SF30_10_Line_of_Business__c  ASC, Product__c ASC, Occupancy__c ASC,Issuing_Office__c  ASC,
+                     Production_Office__c ASC, Assigned_Underwriter__c ASC, Effective_Date__c ASC, Expiration_Date__c ASC,
+                     Producer__r.Name ASC, StageName ASC, Insurance_Sub_Type__c ASC, Layer__c ASC, CurrencyISOCode ASC, /*Policy_Limit__c DESC,*/
+                     Policy_Limit_Curr__c DESC, Starr_Limit_Currency__c DESC, Starr_Limit__c DESC, Name ASC];
+            
+        }
+        
+        
+        for(Integer i=0; i<opps.size(); i++){
+            //Modification added by Sagar on 29 Sept
+            if(opps[i].id == currentOpportunityID){
+                currentOpp = opps[i]; // Current opportunity detail to be send
+                system.debug('Opportunity Matched');
+                system.debug('currentOpp.Layer__c'+currentOpp.Layer__c);
+                if( currentOpp.Layer__c == NULL){
+                    currentOpp.Layer__c = currentOpp.Insurance_Sub_Type__c;
+                }
+                else{
+                    currentopp.Product__c = currentOpp.Occupancy__c;
+                }
+                if(currentOpp!=null){
+                    update  currentOpp;
+                }
+            }
+            if(opps[i].createdDate <= dateToday && opps[i].CreatedDate > date2YearsBack){
+                system.debug('Date Condtion is matched');
+                if(currentOpp.Clearance_Indicator__c == false && opps[i].Assigned_Underwriter__c != null){
+                    //Terence Chiu - 09/04/2013 - added if condition to only include the assigned underwriter if the record type name
+                    //is not included in record type name exclusion list - Zendesk ticket 53293
+                    if(!recordTypeExclusionSet.contains(opps[i].RecordType.Name)){
+                        System.debug('Assigned UW User ID: ' + opps[i].Assigned_Underwriter__c);
+                        System.debug('Opp Record Type Name: ' + opps[i].RecordType.Name);
+                        setassignedwriter.add(opps[i].Assigned_Underwriter__c);
+                    }
+                }
+            }
+        }
+        if(setassignedwriter != null && !setassignedwriter.isEmpty()){
+            for(ID userID: setassignedwriter){
+                Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+                mail.setSaveAsActivity(false);
+                mail.setTemplateId(UNDERWRITER_TEMPLATE_ID);
+                mail.setTargetObjectId(userID); 
+                mail.setWhatId(currentOpp.id);
+                //If Condition added by rochak jain
+                if(!Test.isRunningTest()){
+                    Messaging.sendEmail(new Messaging.SingleEmailMessage[] { mail });
+                }
+            }
+        }
+        return 'Success';
+    }
+    
+    public String formatCurrencyWithoutDecimal(Decimal myVal) {
+        String formattedValue = '';
+        if(myVal != null) {
+            formattedValue = myVal.round().format();
+        }
+        return formattedValue;
+    }
+    
+    webservice static List<Opportunity> resmethod(Id accountId,String source){
+        System.debug('source'+source_1);
+        List<Opportunity> res =new  List<Opportunity> ();
+        DateTime dateToday = system.now();
+        date systemdate =  Date.Today().addYears(-5); 
+        
+        if(source == source_2){
+            res =[SELECT RecordType.Name,Assigned_Underwriter__c, Type,Producer__c, Line_Of_Business__c, Product_Profit_Center__c,Profit_Center__c, Occupancy__c, Issuing_Office__c,Placing_Underwriter__c,Attachment_Point__c, Placing_Underwriter__r.Name,Product__c,Primary_XS__c,Assigned_Production_Branch__c,Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c, Producer__r.Name, StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c,*/ Policy_Limit_Curr__c, Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode,Starr_Limit_USD__c,Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name,Starr_Submission_AutoNumber__c FROM Opportunity WHERE AccountId = : accountId and  Expiration_Date__c >= :systemdate AND StageName!= 'Void' AND Type!='Endorsement'];
+            System.debug('Assigned_Underwriter__c--'+res);
+        }else{
+            res =[SELECT RecordType.Name, Assigned_Underwriter__c,Type,SF30_10_Line_of_Business__c,Producer__c,SF30_10_Profit_Center__c,Product_Profit_Center__c,Placing_Underwriter__c, Attachment_Point__c,Placing_Underwriter__r.Name,Product__c, Assigned_Production_Branch__c, Occupancy__c, Issuing_Office__c, Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c, Producer__r.Name, StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c,*/ Policy_Limit_Curr__c, Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode,Starr_Limit_USD__c,Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name,Starr_Submission_AutoNumber__c FROM Opportunity WHERE AccountId = : accountId AND Expiration_Date__c >= :systemdate AND StageName!= 'Void' AND Type!='Endorsement'];
+        }
+        System.debug('res--'+res.size());
+        if(accountId!=null && !string.isBlank(accountId) && systemdate!=null){
+            List<Opportunity> layer= [SELECT Layer__c FROM Opportunity WHERE AccountId = : accountId AND Expiration_Date__c >= :systemdate AND StageName!= 'Void' AND Type!='Endorsement'];
+        }
+        
+        
+        return res;
+    }
+    
+    webservice static List<Opportunity> contractorresmethod(Id accountId,String source)
+    {
+        List<Opportunity> contractorres =new  List<Opportunity> (); 
+        DateTime dateToday = system.now();
+        date systemdate =  Date.Today().addYears(-5);   
+        if(source == source_2){
+            contractorres =[SELECT RecordType.Name,Assigned_Underwriter__c, Type, Producer__c,Line_Of_Business__c, Product_Profit_Center__c,Profit_Center__c, Occupancy__c,Placing_Underwriter__c,Attachment_Point__c, Issuing_Office__c, Placing_Underwriter__r.Name,Primary_XS__c,Product__c,Assigned_Production_Branch__c,Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c, Producer__r.Name, StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c*/ Policy_Limit_Curr__c,Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode,Starr_Limit_USD__c,Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name,Starr_Submission_AutoNumber__c FROM Opportunity WHERE Contractor__c = : accountId AND  Expiration_Date__c >= :systemdate AND StageName!= 'Void' AND Type!='Endorsement' ORDER BY Name];
+        }else{
+            contractorres =[SELECT RecordType.Name, Assigned_Underwriter__c,Type,Producer__c, SF30_10_Line_of_Business__c,Placing_Underwriter__r.Name,Product__c,Placing_Underwriter__c,Attachment_Point__c, SF30_10_Profit_Center__c,Product_Profit_Center__c, Assigned_Production_Branch__c, Occupancy__c, Issuing_Office__c, Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c, Producer__r.Name, StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c*/ Policy_Limit_Curr__c,Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode,Starr_Limit_USD__c,Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name,Starr_Submission_AutoNumber__c FROM Opportunity WHERE Contractor__c = : accountId AND  Expiration_Date__c >= :systemdate AND StageName!= 'Void' AND Type!='Endorsement' ORDER BY Name];
+            
+        }
+        system.debug(contractorres.size());
+        return contractorres;
+    }
+    
+    webservice static List<Opportunity> projectresmethod(Id accountId,String source)
+    {
+        List<Opportunity> projectres =new  List<Opportunity> ();
+        DateTime dateToday = system.now();
+        date systemdate =  Date.Today().addYears(-5); 
+        if(source == source_2){
+            projectres =[SELECT RecordType.Name,Assigned_Underwriter__c, Type, Producer__c,Line_Of_Business__c, Product_Profit_Center__c,Profit_Center__c, Occupancy__c,Placing_Underwriter__c,Attachment_Point__c,Placing_Underwriter__r.Name,Product__c,Primary_XS__c, Issuing_Office__c,Assigned_Production_Branch__c, Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c, Producer__r.Name, StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c*/ Policy_Limit_Curr__c, Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode, Starr_Limit_USD__c,Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name,Starr_Submission_AutoNumber__c FROM Opportunity WHERE Project_Name__c = : accountId and  Expiration_Date__c >= :systemdate and StageName!= 'Void' and Type!='Endorsement' order by Name];
+        }else{
+            projectres =[SELECT RecordType.Name, Assigned_Underwriter__c,Type,Producer__c,SF30_10_Line_of_Business__c, SF30_10_Profit_Center__c,Product_Profit_Center__c, Attachment_Point__c,Placing_Underwriter__c,Placing_Underwriter__r.Name,Assigned_Production_Branch__c,Product__c, Occupancy__c, Issuing_Office__c, Production_Office__c, Assigned_Underwriter__r.Name, Effective_Date__c, Expiration_Date__c, Producer__r.Name, StageName, Insurance_Sub_Type__c, Layer__c, /*Policy_Limit__c*/ Policy_Limit_Curr__c, Starr_Limit_Currency__c, Starr_Limit__c, Name, Account.Name, CurrencyISOCode, Starr_Limit_USD__c,Business_Unit__c,Attachment_Point_USD_Conv__c, Contractor__r.Name, Project_Name__r.Name,Starr_Submission_AutoNumber__c FROM Opportunity WHERE Project_Name__c = : accountId and  Expiration_Date__c >= :systemdate and StageName!= 'Void' and Type!='Endorsement' order by Name];            
+        }
+        
+        return projectres;
+    }
+    public class accountsKeyWrapper {
+        
+        @AuraEnabled public String ClientName { get; set; }
+        @AuraEnabled public String DunsNumber { get; set; }
+        @AuraEnabled public String UltimateDunsNumber { get; set; }
+        @AuraEnabled public String AddressLine1 { get; set; }
+        @AuraEnabled public String AddressCity { get; set; }
+        @AuraEnabled public String AddressState { get; set; }
+        @AuraEnabled public String AddressCountry { get; set; }
+        
+        // Trivial constructor, for server-side Apex -> client-side JavaScript
+        public accountsKeyWrapper(String ClnName, String Dnum, String UlDnNum,String adrL1,String adrcty,String adrState,String adrCntry) {
+            this.ClientName= ClnName;
+            this.DunsNumber = Dnum;
+            this.UltimateDunsNumber = UlDnNum;
+            this.AddressLine1= adrL1;
+            this.AddressCity = adrcty;
+            this.AddressState = adrState;
+            this.AddressCountry= adrCntry;
+        }
+        
+        // Default, no-arg constructor, for client-side -> server-side
+        public accountsKeyWrapper() {}
+        
+    }
+    
+}
